@@ -96,7 +96,17 @@ fn position_translation(windows: Query<&Window, With<PrimaryWindow>>, mut q: Que
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            // 기본 해상도 설정
+            primary_window: Some(Window {
+                title: "Snake!".to_string(),
+                name: Some("Snake Game".to_string()),
+                resolution: (500.0, 500.0).into(),
+                ..default()
+            }),
+            ..Default::default()
+        }))
         // 프로그램 시작 시 카메라 설정 함수 실행
         .add_systems(Startup, (setup_camera, spawn_snake))
         .add_systems(Update, snake_movement)
