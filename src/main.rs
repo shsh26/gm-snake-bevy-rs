@@ -25,11 +25,18 @@ fn spawn_snake(mut commands: Commands) {
         .insert(SnakeHead);
 }
 
+fn snake_movement(mut head_positions: Query<(&SnakeHead, &mut Transform)>) {
+    for (_, mut transform) in head_positions.iter_mut() {
+        transform.translation.x += 2.0;
+    }
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         // 프로그램 시작 시 카메라 설정 함수 실행
-        .add_systems(Startup, setup_camera)
-        .add_systems(Startup, spawn_snake)
+        // .add_systems(Startup, setup_camera)
+        // .add_systems(Startup, spawn_snake)
+        .add_systems(Update, (setup_camera, spawn_snake, snake_movement))
         .run();
 }
