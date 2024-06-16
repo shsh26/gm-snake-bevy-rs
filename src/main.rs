@@ -27,7 +27,7 @@ fn spawn_snake(mut commands: Commands) {
 
 fn snake_movement(mut head_positions: Query<(&SnakeHead, &mut Transform)>) {
     for (_, mut transform) in head_positions.iter_mut() {
-        transform.translation.x += 2.0;
+        transform.translation.y += 2.0;
     }
 }
 
