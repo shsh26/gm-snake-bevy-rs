@@ -1,7 +1,12 @@
+use std::time::Duration;
 use bevy::prelude::*;
+use bevy::time::common_conditions::on_timer;
 use bevy::window::PrimaryWindow;
+use rand::random;
+
 
 const SNAKE_HEAD_COLOR: Color = Color::rgb(0.7, 0.7, 0.7);
+const FOOD_COLOR: Color = Color::rgb(1.0, 0.0, 1.0);
 
 const ARENA_WIDTH: u32 = 10;
 const ARENA_HEIGHT: u32 = 10;
@@ -28,6 +33,9 @@ impl Size {
 
 #[derive(Component)]
 struct SnakeHead;
+
+#[derive(Component)]
+struct Food;
 
 fn setup_camera(mut commands: Commands) {
     // commands.spawn_bundle(OrthographicCameraBundle::new_2d());
@@ -66,6 +74,22 @@ fn snake_movement(keyboard_input: Res<ButtonInput<KeyCode>>, mut head_positions:
             pos.x += 1;
         }
     }
+}
+
+fn food_spawner(mut commands: Commands) {
+    commands.spawn(SpriteBundle {
+        sprite: Sprite {
+            color: FOOD_COLOR,
+            ..default()
+        },
+        ..default()
+    })
+        .insert(Food)
+        .insert(Position { 
+            x: (random::<f32>() * ARENA_WIDTH as f32) as i32, 
+            y: (random::<f32>() * ARENA_HEIGHT as f32) as i32, 
+        })
+        .insert(Size::square(0.8));
 }
 
 fn size_scaling(windows: Query<&Window, With<PrimaryWindow>>, mut q: Query<(&Size, &mut Transform)>) {
@@ -110,6 +134,7 @@ fn main() {
         // 프로그램 시작 시 카메라 설정 함수 실행
         .add_systems(Startup, (setup_camera, spawn_snake))
         .add_systems(Update, snake_movement)
+        .add_systems(Update, food_spawner.run_if(on_timer(Duration::from_secs_f32(1.0))))
         // 기본 세팅 후 크기, 위치 변환
         .add_systems(PostUpdate, (position_translation, size_scaling))
         .run();
