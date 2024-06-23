@@ -69,6 +69,9 @@ struct Food;
 #[derive(Event)]
 struct GrowthEvent;
 
+#[derive(Event)]
+struct GameOverEvent;
+
 #[derive(Default, Resource, Deref, DerefMut)]
 struct LastTailPosition(Option<Position>);
 
@@ -144,6 +147,7 @@ fn snake_movement(
     mut heads: Query<(Entity, &SnakeHead)>,
     mut positions: Query<&mut Position>,
     mut last_tail_position: ResMut<LastTailPosition>,
+    mut game_over_writer: EventWriter<GameOverEvent>,
 ) {
     if let Some((head_entity, head)) = heads.iter_mut().next() {
         let segment_positions = segments
@@ -165,6 +169,16 @@ fn snake_movement(
                 head_pos.y -= 1;
             }
         };
+        if head_pos.x < 0
+            || head_pos.y < 0
+            || head_pos.x as u32 >= ARENA_WIDTH
+            || head_pos.y as u32 >= ARENA_HEIGHT
+        {
+            game_over_writer.send(GameOverEvent);
+        }
+        if segment_positions.contains(&head_pos) {
+            game_over_writer.send(GameOverEvent);
+        }
         *last_tail_position = LastTailPosition(Some(*segment_positions.last().unwrap()));
         segment_positions
             .iter()
@@ -251,12 +265,28 @@ fn snake_eating(
     }
 }
 
+fn game_over(
+    mut commands: Commands,
+    mut reader: EventReader<GameOverEvent>,
+    segments_res: ResMut<SnakeSegments>,
+    food: Query<Entity, With<Food>>,
+    segments: Query<Entity, With<SnakeSegment>>,
+) {
+    if reader.read().next().is_some() {
+        for entity in food.iter().chain(segments.iter()) {
+            commands.entity(entity).despawn();
+        }
+        spawn_snake(commands, segments_res);
+    }
+}
+
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
         .insert_resource(SnakeSegments::default())
         .insert_resource(LastTailPosition::default())
         .add_event::<GrowthEvent>()
+        .add_event::<GameOverEvent>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             // 기본 해상도 설정
             primary_window: Some(Window {
@@ -272,6 +302,7 @@ fn main() {
         .add_systems(Update, snake_movement_input.before(snake_movement))
         .add_systems(Update, snake_eating.after(snake_movement))
         .add_systems(Update, snake_growth.after(snake_eating))
+        .add_systems(Update, game_over.after(snake_movement))
         .add_systems(
             Update,
             snake_movement.run_if(on_timer(Duration::from_secs_f32(0.150))),
