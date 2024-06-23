@@ -66,6 +66,12 @@ struct SnakeSegments(Vec<Entity>);
 #[derive(Component)]
 struct Food;
 
+#[derive(Event)]
+struct GrowthEvent;
+
+#[derive(Default, Resource, Deref, DerefMut)]
+struct LastTailPosition(Option<Position>);
+
 fn setup_camera(mut commands: Commands) {
     // commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn(Camera2dBundle::default());
@@ -137,6 +143,7 @@ fn snake_movement(
     segments: ResMut<SnakeSegments>,
     mut heads: Query<(Entity, &SnakeHead)>,
     mut positions: Query<&mut Position>,
+    mut last_tail_position: ResMut<LastTailPosition>,
 ) {
     if let Some((head_entity, head)) = heads.iter_mut().next() {
         let segment_positions = segments
@@ -158,12 +165,24 @@ fn snake_movement(
                 head_pos.y -= 1;
             }
         };
+        *last_tail_position = LastTailPosition(Some(*segment_positions.last().unwrap()));
         segment_positions
             .iter()
             .zip(segments.iter().skip(1))
             .for_each(|(pos, segment)| {
                 *positions.get_mut(*segment).unwrap() = *pos;
             })
+    }
+}
+
+fn snake_growth(
+    commands: Commands,
+    last_tail_position: Res<LastTailPosition>,
+    mut segments: ResMut<SnakeSegments>,
+    mut growth_reader: EventReader<GrowthEvent>,
+) {
+    if growth_reader.read().next().is_some() {
+        segments.push(spawn_segment(commands, last_tail_position.0.unwrap()));
     }
 }
 
@@ -216,10 +235,28 @@ fn position_translation(
     }
 }
 
+fn snake_eating(
+    mut commands: Commands,
+    mut growth_writer: EventWriter<GrowthEvent>,
+    food_positions: Query<(Entity, &Position), With<Food>>,
+    head_positions: Query<&Position, With<SnakeHead>>,
+) {
+    for head_pos in head_positions.iter() {
+        for (food_entity, food_pos) in food_positions.iter() {
+            if head_pos == food_pos {
+                commands.entity(food_entity).despawn();
+                growth_writer.send(GrowthEvent);
+            }
+        }
+    }
+}
+
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
         .insert_resource(SnakeSegments::default())
+        .insert_resource(LastTailPosition::default())
+        .add_event::<GrowthEvent>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             // 기본 해상도 설정
             primary_window: Some(Window {
@@ -233,6 +270,8 @@ fn main() {
         // 프로그램 시작 시 카메라 설정 함수 실행
         .add_systems(Startup, (setup_camera, spawn_snake))
         .add_systems(Update, snake_movement_input.before(snake_movement))
+        .add_systems(Update, snake_eating.after(snake_movement))
+        .add_systems(Update, snake_growth.after(snake_eating))
         .add_systems(
             Update,
             snake_movement.run_if(on_timer(Duration::from_secs_f32(0.150))),
