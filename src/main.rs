@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
+use bevy::utils::petgraph::visit::Walker;
 use bevy::window::PrimaryWindow;
 use rand::random;
 
@@ -59,7 +60,7 @@ struct SnakeHead {
 #[derive(Component)]
 struct SnakeSegment;
 
-#[derive(Default, Resource)]
+#[derive(Default, Resource, Deref, DerefMut)]
 struct SnakeSegments(Vec<Entity>);
 
 #[derive(Component)]
@@ -132,8 +133,17 @@ fn snake_movement_input(
     }
 }
 
-fn snake_movement(mut heads: Query<(&mut Position, &SnakeHead)>) {
-    if let Some((mut head_pos, head)) = heads.iter_mut().next() {
+fn snake_movement(
+    segments: ResMut<SnakeSegments>,
+    mut heads: Query<(Entity, &SnakeHead)>,
+    mut positions: Query<&mut Position>,
+) {
+    if let Some((head_entity, head)) = heads.iter_mut().next() {
+        let segment_positions = segments
+            .iter()
+            .map(|e| *positions.get_mut(*e).unwrap())
+            .collect::<Vec<Position>>();
+        let mut head_pos = positions.get_mut(head_entity).unwrap();
         match &head.direction {
             Direction::Left => {
                 head_pos.x -= 1;
@@ -147,7 +157,13 @@ fn snake_movement(mut heads: Query<(&mut Position, &SnakeHead)>) {
             Direction::Down => {
                 head_pos.y -= 1;
             }
-        }
+        };
+        segment_positions
+            .iter()
+            .zip(segments.iter().skip(1))
+            .for_each(|(pos, segment)| {
+                *positions.get_mut(*segment).unwrap() = *pos;
+            })
     }
 }
 
@@ -203,6 +219,7 @@ fn position_translation(
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
+        .insert_resource(SnakeSegments::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             // 기본 해상도 설정
             primary_window: Some(Window {
@@ -214,10 +231,8 @@ fn main() {
             ..Default::default()
         }))
         // 프로그램 시작 시 카메라 설정 함수 실행
-        .add_systems(Startup, setup_camera)
-        .add_systems(Startup, spawn_snake)
+        .add_systems(Startup, (setup_camera, spawn_snake))
         .add_systems(Update, snake_movement_input.before(snake_movement))
-        .insert_resource(SnakeSegments::default())
         .add_systems(
             Update,
             snake_movement.run_if(on_timer(Duration::from_secs_f32(0.150))),
